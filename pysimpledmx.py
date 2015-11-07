@@ -1,4 +1,3 @@
-import serial
 import sys
 import socket
 
@@ -63,24 +62,6 @@ class DMXConnection(object):
       self.dmx_frame[chan-1] = 0
 
 
-  def render(self):
-    ''''
-    Updates the DMX output from the USB DMX Pro with the values from self.dmx_frame.
-    '''
-    packet = [
-              START_VAL,
-              LABELS['TX_DMX_PACKET'],
-              len(self.dmx_frame) & 0xFF,
-              (len(self.dmx_frame) >> 8) & 0xFF,
-    ]
-    packet += self.dmx_frame
-    packet.append(END_VAL)
-
-    packet = map(chr, packet)
-    self.com.write(''.join(packet))
-
-  def close(self):
-    self.com.close()
 
 
 class DMXConnectionEthernet(DMXConnection):
@@ -104,15 +85,7 @@ class DMXConnectionEthernet(DMXConnection):
         ''''
         Updates the DMX output from the USB DMX Pro with the values from self.dmx_frame.
         '''
-        packet = [
-                  START_VAL,
-                  LABELS['TX_DMX_PACKET'],
-                  len(self.dmx_frame) & 0xFF,
-                  (len(self.dmx_frame) >> 8) & 0xFF,
-        ]
-        packet += self.dmx_frame
-        packet.append(END_VAL)
-
-        packet = map(chr, packet)
-        data = ''.join(packet)
-        print "Bytes sent: %d"%(self.socket.sendto(data, self.address))
+        header = ["A", "r", "t", "-", "N", "e", "t", 0, 0x50, 0x00, ]
+        packet = struct.pack("cccccccccccccccccc", *header)
+        packet += map(chr, self.dmx_frame) 
+        print "Bytes sent: %d"%(self.socket.sendto(packet, self.address))

@@ -53,12 +53,14 @@ class StateMachine(threading.Thread):
 			self.cur_state = next_state
 
 		self.renderDMX()
+		print "Executing"
 
 	def idle(self):
 		pass
 
 	def another_state(self):
-		print self.grid
+		#print self.grid
+                pass
 
 	def renderDMX(self):
 		for r in xrange(ROWS):
@@ -66,7 +68,7 @@ class StateMachine(threading.Thread):
 				val = self.grid[r, c]
 				for i in xrange(3):
 					chan = r*COLS*3 + c*3 + i + 1
-					print chan
+					#print chan
 					self.dmx.setChannel(chan, random.randint(1,255))
 		self.dmx.render()
 		
