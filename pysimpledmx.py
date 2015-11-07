@@ -1,5 +1,6 @@
 import sys
 import socket
+import struct
 
 START_VAL   = 0x7E
 END_VAL     = 0xE7
@@ -44,8 +45,8 @@ class DMXConnection(object):
     DMX frame, to be rendered the next time the render() method is called.
     '''
     if not 1 <= chan <= DMX_SIZE:
-      print 'Invalid channel specified: %s' % chan-1
-      return
+        print 'Invalid channel specified: %s' % chan-1
+        return
     # clamp value
     val = max(0, min(val, 255))
     self.dmx_frame[chan-1] = val
@@ -57,9 +58,9 @@ class DMXConnection(object):
     With optional channel argument, clears only one channel.
     '''
     if chan == 0:
-      self.dmx_frame = [0] * DMX_SIZE
+        self.dmx_frame = [0] * DMX_SIZE
     else:
-      self.dmx_frame[chan-1] = 0
+        self.dmx_frame[chan-1] = 0
 
 
 
@@ -68,7 +69,7 @@ class DMXConnectionEthernet(DMXConnection):
     def __init__(self, address):
         '''
         For example:
-            DMXConnection(("localhost", 8000))
+            DMXConnectionEthernet(("localhost", 8000))
         '''
         self.dmx_frame = [0] * DMX_SIZE
         try:
@@ -85,7 +86,17 @@ class DMXConnectionEthernet(DMXConnection):
         ''''
         Updates the DMX output from the USB DMX Pro with the values from self.dmx_frame.
         '''
-        header = ["A", "r", "t", "-", "N", "e", "t", 0, 0x50, 0x00, ]
-        packet = struct.pack("cccccccccccccccccc", *header)
-        packet += map(chr, self.dmx_frame) 
-        print "Bytes sent: %d"%(self.socket.sendto(packet, self.address))
+        header = ('A', 'r', 't', '-',  'N', 'e', 't', '\x00', 
+                  '\x00', 'P', '\x00', '\x0e', 
+                  '\xf6', '\x00', '\x00', '\x00', 
+                  '\x02', '\x00', 'd', 'd')
+        packet = struct.pack("c"*len(header), *header)
+        packet += "".join(map(chr, self.dmx_frame))
+        self.socket.sendto(packet, self.address)
+
+    def setLED(self, row, col , color):
+    """
+    """
+    self.setChannel(row*COLS*3 + col*3, color[0])
+    self.setChannel(row*COLS*3 + col*3 + 1, color[1])
+    self.setChannel(row*COLS*3 + col*3 + 2, color[2])
