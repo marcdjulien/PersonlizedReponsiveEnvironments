@@ -93,10 +93,3 @@ class DMXConnectionEthernet(DMXConnection):
         packet = struct.pack("c"*len(header), *header)
         packet += "".join(map(chr, self.dmx_frame))
         self.socket.sendto(packet, self.address)
-
-    def setLED(self, row, col , color):
-    """
-    """
-    self.setChannel(row*COLS*3 + col*3, color[0])
-    self.setChannel(row*COLS*3 + col*3 + 1, color[1])
-    self.setChannel(row*COLS*3 + col*3 + 2, color[2])
