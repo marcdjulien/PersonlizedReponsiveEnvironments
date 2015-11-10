@@ -5,6 +5,7 @@ import numpy as np
 from scipy import signal
 import random
 from Tkinter import *
+import oscinput
 
 
 ROWS = 5
@@ -16,20 +17,23 @@ OFF_STATE = "OFF_STATE"
 FADE_STATE = "FADE_STATE"
 IDLE_STATE = "IDLE_STATE"
 PULSE_STATE = "PULSE_STATE"
+SPOT_LIGHT_STATE = "SPOT_LIGHT_STATE"
 
 def random_grid():
 	grid = []
 	for i in xrange(ROWS):
 		row = []
 		for j in xrange(COLS):
-			row.append((random.randint(0,255),random.randint(0,255),random.randint(0,255)))
+			row.append(random_color())
 		grid.append(row)
 	return np.array(grid)
 
+def random_color():
+	return (random.randint(0,255),random.randint(0,255),random.randint(0,255))
+
 class StateMachine(threading.Thread):
 	"""docstring for StateMachine"""
-
-	def __init__(self, period, address, show_gui=False):
+	def __init__(self, period, dmx_address, osc_address, show_gui=False):
 		super(StateMachine, self).__init__()
 		self.cur_state = OFF_STATE
 		self.state_time = 0
@@ -38,7 +42,8 @@ class StateMachine(threading.Thread):
 		self.time = time.time()
 		self.next_execute_time = self.time + self.period
 
-		self.dmx = pysimpledmx.DMXConnectionEthernet(address)
+		self.dmx = pysimpledmx.DMXConnectionEthernet(dmx_address)
+		self.osc = oscinput.OSCInput(osc_address)
 
 		# 2D Array of Color (r,g,b) tuples
 		grid = []
@@ -56,13 +61,16 @@ class StateMachine(threading.Thread):
 		self.root = Tk()
 		self.canvas = Canvas(self.root, width=WIDTH, height=HEIGHT)
 		self.canvas.pack()
-		self.root.after(50, self.draw)
+		self.root.after(int(self.period*1000), self.draw)
 		self.root.mainloop()
 
 	def run(self):
 		"""
 		Starts the time triggered state machine.
 		"""
+
+		self.osc.start()
+
 		while True:
 			if self.time > self.next_execute_time:
 				self.execute()
@@ -80,7 +88,7 @@ class StateMachine(threading.Thread):
 				green = self.grid[r,c,1]
 				blue = self.grid[r,c,2]
 				color = "#%02x%02x%02x" % (red, green, blue)
-				self.canvas.create_rectangle(r*w, c*h, (r+1)*w, (c+1)*h, fill=color)
+				self.canvas.create_rectangle(c*w, r*h, (c+1)*w, (r+1)*h, fill=color)
 		self.root.after(50, self.draw)
 
 	def execute(self):
@@ -92,30 +100,46 @@ class StateMachine(threading.Thread):
 
 		if self.cur_state == OFF_STATE:
 			self.off_state()
-
-			# Set of params for fading
-			self.set_fade(np.array(self.grid), random_grid(), 5.0)
-			next_state = FADE_STATE
+			next_state = IDLE_STATE
 
 		elif self.cur_state == IDLE_STATE:
 			self.idle_state()
-			# Probably a lot of trnasitions here
-			next_state = IDLE_STATE
-
-		elif self.cur_state == FADE_STATE:
-			# self.fade_time
-			# self.start_grid
-			# self.end_grid
-			self.fade_state()
-			if self.state_time >= self.fade_time:
+			if self.osc.get_val("/2/push1") == 1:
+				# self.fade_time
+				# self.start_grid
+				# self.end_grid
+				# Set of params for fading
+				self.set_fade(np.array(self.grid), random_grid(), 5.0)
+				next_state = FADE_STATE
+			
+			elif self.osc.get_val("/2/push2") == 1:
 				self.set_pulse(1.0, bounce=False)
 				next_state = PULSE_STATE
 
+			elif self.osc.get_val("/2/push3") == 1:
+				self.set_spot_light(int(time.time()*10/COLS)%ROWS,
+									int((time.time()*10)%COLS),
+								    random_color(), 
+								    0.025)
+				next_state = SPOT_LIGHT_STATE
+
+		elif self.cur_state == FADE_STATE:
+			self.fade_state()
+			if self.state_time >= self.fade_time:
+				next_state = IDLE_STATE
+
 		elif self.cur_state == PULSE_STATE:
 			self.pulse_state()
+			if self.state_time > 5.0:
+				next_state = IDLE_STATE
+
+		elif self.cur_state == SPOT_LIGHT_STATE:
+			self.spot_light_state()
+			if self.state_time > self.spot_light_time:
+				next_state = IDLE_STATE
 
 		# Render the new lights
-		self.render_leds()
+		# self.render_leds()
 
 		# Print transitions
 		if(next_state != self.cur_state):
@@ -149,6 +173,10 @@ class StateMachine(threading.Thread):
 		self.grid = np.clip(self.grid, 0, 255)
 		self.grid = self.grid.astype(int)
 
+	def spot_light_state(self):
+		self.grid *= 0
+		self.grid[self.spot_light_row, self.spot_light_col, :] = self.spot_light_color
+
 	########################
 	### Helper Functions ###
 	########################
@@ -165,6 +193,12 @@ class StateMachine(threading.Thread):
 			self.end_grid = end_grid
 		else:
 			self.end_grid = np.array(self.grid)
+
+	def set_spot_light(self, row, col, color, time):
+		self.spot_light_row = row
+		self.spot_light_col = col
+		self.spot_light_color = color
+		self.spot_light_time = time
 
 	def render_leds(self):
 		"""
