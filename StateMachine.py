@@ -18,6 +18,7 @@ FADE_STATE = "FADE_STATE"
 IDLE_STATE = "IDLE_STATE"
 PULSE_STATE = "PULSE_STATE"
 SPOT_LIGHT_STATE = "SPOT_LIGHT_STATE"
+EXIT_STATE = "EXIT_STATE"
 
 def random_grid():
 	grid = []
@@ -122,6 +123,8 @@ class StateMachine(threading.Thread):
 								    random_color(), 
 								    0.025)
 				next_state = SPOT_LIGHT_STATE
+			elif self.osc.get_val("/2/push4") == 1:
+				next_state = EXIT_STATE
 
 		elif self.cur_state == FADE_STATE:
 			self.fade_state()
@@ -137,6 +140,8 @@ class StateMachine(threading.Thread):
 			self.spot_light_state()
 			if self.state_time > self.spot_light_time:
 				next_state = IDLE_STATE
+		elif self.cur_state == EXIT_STATE:
+			self.exit()
 
 		# Render the new lights
 		# self.render_leds()
@@ -212,3 +217,7 @@ class StateMachine(threading.Thread):
 					self.dmx.setChannel(chan, val[i])
 		self.dmx.render()
 		
+	def exit(self):
+		self.osc.close()
+		self.osc.join()
+		exit()

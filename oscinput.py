@@ -25,4 +25,6 @@ class OSCInput(threading.Thread):
     
     def run(self):
         self.server.serve_forever()
+
+    def close(self):
         self.server.close()
