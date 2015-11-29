@@ -5,8 +5,7 @@ import numpy as np
 from scipy import signal
 import random
 from Tkinter import *
-import oscinput
-
+import Constants
 
 ROWS = 5
 COLS = 6
@@ -20,6 +19,7 @@ PULSE_STATE = "PULSE_STATE"
 SPOT_LIGHT_STATE = "SPOT_LIGHT_STATE"
 EXIT_STATE = "EXIT_STATE"
 
+
 def random_grid():
 	grid = []
 	for i in xrange(ROWS):
@@ -29,13 +29,15 @@ def random_grid():
 		grid.append(row)
 	return np.array(grid)
 
-def random_color():
-	return (random.randint(0,255),random.randint(0,255),random.randint(0,255))
 
-class StateMachine(threading.Thread):
+def random_color():
+	return random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)
+
+
+class LEDStateMachine(threading.Thread):
 	"""docstring for StateMachine"""
-	def __init__(self, period, dmx_address, osc_address, show_gui=False):
-		super(StateMachine, self).__init__()
+	def __init__(self, period, dmx_address, osc, show_gui=False):
+		super(LEDStateMachine, self).__init__()
 		self.cur_state = OFF_STATE
 		self.state_time = 0
 		self.period = period
@@ -44,7 +46,7 @@ class StateMachine(threading.Thread):
 		self.next_execute_time = self.time + self.period
 
 		self.dmx = pysimpledmx.DMXConnectionEthernet(dmx_address)
-		self.osc = oscinput.OSCInput(osc_address)
+		self.osc = osc
 
 		# 2D Array of Color (r,g,b) tuples
 		grid = []
@@ -69,16 +71,17 @@ class StateMachine(threading.Thread):
 		"""
 		Starts the time triggered state machine.
 		"""
-
-		self.osc.start()
-
-		while True:
+		print "LEDStateMachine: Running LEDStateMachine"
+		self.done = False
+		while not self.done:
 			if self.time > self.next_execute_time:
 				self.execute()
 				self.next_execute_time += self.period
 			else:
 				time.sleep(0.001)
 			self.time = time.time()
+		self.root.destroy()
+		print "LEDStateMachine: Thread finished."
 
 	def draw(self):
 		for r in xrange(ROWS):
@@ -106,22 +109,31 @@ class StateMachine(threading.Thread):
 		elif self.cur_state == IDLE_STATE:
 			self.idle_state()
 			if self.osc.get_val("/2/push1") == 1:
-				# self.fade_time
+				# Set of params for fading
 				# self.start_grid
 				# self.end_grid
-				# Set of params for fading
-				self.set_fade(np.array(self.grid), random_grid(), 5.0)
+				# self.fade_time
+				self.set_fade(np.array(self.grid), Constants.MORNING_LEDS, 5.0)
 				next_state = FADE_STATE
 			
 			elif self.osc.get_val("/2/push2") == 1:
-				self.set_pulse(1.0, bounce=False)
+				# Set of params for pulse
+				# self.pulse_frequency
+				# self.pulse_bounce
+				# self.end_grid
+				self.set_pulse(freq=1.0, bounce=False)
 				next_state = PULSE_STATE
 
 			elif self.osc.get_val("/2/push3") == 1:
-				self.set_spot_light(int(time.time()*10/COLS)%ROWS,
-									int((time.time()*10)%COLS),
-								    random_color(), 
-								    0.025)
+				# Set of params for spot light
+				# self.spot_light_row
+				# self.spot_light_col
+				# self.spot_light_color
+				# self.spot_light_time
+				self.set_spot_light(int(time.time()*10/COLS) % ROWS,
+									int((time.time()*10) % COLS),
+									random_color(),
+									0.025)
 				next_state = SPOT_LIGHT_STATE
 			elif self.osc.get_val("/2/push4") == 1:
 				next_state = EXIT_STATE
@@ -218,6 +230,4 @@ class StateMachine(threading.Thread):
 		self.dmx.render()
 		
 	def exit(self):
-		self.osc.close()
-		self.osc.join()
-		exit()
+		self.done = True

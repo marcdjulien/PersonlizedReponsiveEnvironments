@@ -1,6 +1,7 @@
 from OSC import OSCServer
 import threading
 
+
 class OSCInput(threading.Thread):
     """docstring for OSCInput"""
     def __init__(self, address):
@@ -24,7 +25,9 @@ class OSCInput(threading.Thread):
             return None
     
     def run(self):
+        print "OSCInput: Running OSCInput"
         self.server.serve_forever()
+        print "OSCInput: Thread finished"
 
     def close(self):
         self.server.close()
