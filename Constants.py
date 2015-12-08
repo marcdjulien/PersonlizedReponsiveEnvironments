@@ -3,6 +3,12 @@ import numpy as np
 ROWS = 5
 COLS = 6
 
+ADJUST_ARRAY = [[0.2, 0.4, 0.6, 0.6, 0.4, 0.2],
+                [0.4, 0.6, 0.8, 0.8, 0.6, 0.4],
+                [0.6, 0.8, 1.0, 1.0, 0.8, 0.6],
+                [0.4, 0.6, 0.8, 0.8, 0.6, 0.4],
+                [0.2, 0.4, 0.6, 0.6, 0.4, 0.2]]
+
 def custom_sort(a, b):
 	a1 = a.split("::")[1]
 	a1 = int(a1.split("-")[0])
@@ -30,3 +36,4 @@ def ledjson_to_array(json_filename, index=None):
 
 NIGHT_LEDS = ledjson_to_array("night_leds.json", 8)
 MORNING_LEDS = ledjson_to_array("morning_leds.json", 8)
+NEUTRAL_LEDS = ledjson_to_array("neutral.json", 1)

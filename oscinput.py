@@ -1,5 +1,6 @@
 from OSC import OSCServer
 import threading
+import time
 
 
 class OSCInput(threading.Thread):
@@ -12,7 +13,7 @@ class OSCInput(threading.Thread):
         self.values = {}        
 
     def default_callback(self, path, tags, args, source):
-        print path
+        print time.time(), path
         if(len(args) == 1):
             self.values[path] = args[0]
         else:

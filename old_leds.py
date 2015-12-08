@@ -5,7 +5,7 @@ import numpy as np
 from scipy import signal
 import random
 from Tkinter import *
-from Constants import *
+import Constants
 
 ROWS = 5
 COLS = 6
@@ -18,9 +18,6 @@ IDLE_STATE = "IDLE_STATE"
 PULSE_STATE = "PULSE_STATE"
 SPOT_LIGHT_STATE = "SPOT_LIGHT_STATE"
 EXIT_STATE = "EXIT_STATE"
-
-#POLL_TIME = [2*60, 4*60, 6*60, 8*60, 10*60]
-POLL_TIME = [30, 60, 90, 120, 150]
 
 
 def random_grid():
@@ -36,28 +33,10 @@ def random_grid():
 def random_color():
 	return random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)
 
-def n_adjusted_array(old_grid, n):
-        brightness = {1: 0.1,
-                      2: 0.3,
-                      3: 0.6,
-                      4: 1.0}
-        new_grid = []
-        n = n+1
-        n = min(n ,4)
-        b = brightness[n]
-        for r in xrange(ROWS):
-                row = []
-                for c in xrange(COLS):
-                        color = [0, 0, 0]
-                        for v in xrange(3):
-                                color[v] = old_grid[r][c][v]*ADJUST_ARRAY[r][c]*b
-                        row.append(color)
-                new_grid.append(row)
-        return new_grid
 
 class LEDStateMachine(threading.Thread):
 	"""docstring for StateMachine"""
-	def __init__(self, period, led_dmx_address, light_dmx_address, osc, kinect, show_gui=False):
+	def __init__(self, period, dmx_address, osc, kinect, show_gui=False):
 		super(LEDStateMachine, self).__init__()
 		self.cur_state = OFF_STATE
 		self.state_time = 0
@@ -66,21 +45,16 @@ class LEDStateMachine(threading.Thread):
 		self.time = time.time()
 		self.next_execute_time = self.time + self.period
 
-		self.leddmx = pysimpledmx.DMXConnectionEthernet(led_dmx_address, universe=0)
-		self.lightdmx = pysimpledmx.DMXConnectionEthernet(light_dmx_address, universe=1)
-
+		self.dmx = pysimpledmx.DMXConnectionEthernet(dmx_address)
 		self.osc = osc
                 self.kinect = kinect
-                self.old_n = 0
 		# 2D Array of Color (r,g,b) tuples
 		grid = []
 		for i in xrange(ROWS):
 			row = [(0,0,0)]*COLS
 			grid.append(row)
 		self.grid = np.array(grid)
-                self.lights = np.array([0, 0, 0, 0])
-                self.vlights = np.array([0, 0, 0, 0])
-                
+
 		self.show_gui = show_gui
 		if show_gui:
 			self.gui_thread = threading.Thread(target = self.run_gui)
@@ -128,41 +102,39 @@ class LEDStateMachine(threading.Thread):
 		next_state = self.cur_state
 		self.state_time += self.period
 
-		#Always transition the lights
-		self.vlights = self.vlights*0.5 + self.lights*0.5
-
 		if self.cur_state == OFF_STATE:
 			self.off_state()
-			self.start_time = time.time()
-			self.poll_index = 0
-			if self.state_time > 3.0:
-        			next_state = IDLE_STATE
+			next_state = IDLE_STATE
 
 		elif self.cur_state == IDLE_STATE:
 			self.idle_state()
-			self.time = time.time() - self.start_time
-                        # Keeps track fo the number of people in the room
-                        # and adjust the brightness
-                        if self.old_n != self.kinect.n:
-                                # set fade for leds
-                                old_arr = np.array(self.grid)
-                                new_arr = np.array(n_adjusted_array(NEUTRAL_LEDS, self.kinect.n))
-                                fade_time = 5.0
-                                self.set_fade(old_arr, new_arr, fade_time)
+			if self.osc.get_val("/2/push1") == 1:
+				# Set of params for fading
+				# self.start_grid
+				# self.end_grid
+				# self.fade_time
+				self.set_fade(np.array(self.grid), Constants.NIGHT_LEDS, 5.0)
+				next_state = FADE_STATE
+			
+			elif self.osc.get_val("/2/push2") == 1:
+				# Set of params for pulse
+				# self.pulse_frequency
+				# self.pulse_bounce
+				# self.end_grid
+				self.set_pulse(freq=1.0, bounce=False)
+				next_state = PULSE_STATE
 
-                                #set stage lights
-                                self.lights = np.array([25,25,25,25])*self.kinect.n
-                                
-                                next_state= FADE_STATE
-                                self.old_n = self.kinect.n
-                        elif self.time > POLL_TIME[self.poll_index]:
-                                freq = 1.0
-                                bounce = False
-                                self.set_pulse(freq, bounce)
-                                self.poll_index += 1
-                                if self.poll_index > 4:
-                                        self.poll_index = 4
-                                next_state = PULSE_STATE
+			elif self.osc.get_val("/2/push3") == 1:
+				# Set of params for spot light
+				# self.spot_light_row
+				# self.spot_light_col
+				# self.spot_light_color
+				# self.spot_light_time
+				self.set_spot_light(int(time.time()*10/COLS) % ROWS,
+									int((time.time()*10) % COLS),
+									random_color(),
+									0.025)
+				next_state = SPOT_LIGHT_STATE
 			elif self.osc.get_val("/2/push4") == 1:
 				next_state = EXIT_STATE
 
@@ -174,7 +146,6 @@ class LEDStateMachine(threading.Thread):
 		elif self.cur_state == PULSE_STATE:
 			self.pulse_state()
 			if self.state_time > 5.0:
-                                self.grid = self.end_grid
 				next_state = IDLE_STATE
 
 		elif self.cur_state == SPOT_LIGHT_STATE:
@@ -198,7 +169,6 @@ class LEDStateMachine(threading.Thread):
 	#######################
 	def off_state(self):
 		self.grid = self.grid * 0
-		self.lights = 0*self.lights
 
 	def idle_state(self):
 		pass
@@ -213,9 +183,9 @@ class LEDStateMachine(threading.Thread):
 
 	def pulse_state(self):
 		if self.pulse_bounce:
-			self.grid = self.end_grid * (0.25*np.sin(2*np.pi*self.pulse_freq*self.state_time) + 0.75)
+			self.grid = self.end_grid * (0.5*np.sin(2*np.pi*self.pulse_freq*self.state_time) + 0.5)
 		else:
-			self.grid = self.end_grid * (0.25*signal.sawtooth(2*np.pi*self.pulse_freq*self.state_time) + 0.75)
+			self.grid = self.end_grid * (0.5*signal.sawtooth(2*np.pi*self.pulse_freq*self.state_time) + 0.5)
 
 		self.grid = np.clip(self.grid, 0, 255)
 		self.grid = self.grid.astype(int)
@@ -257,14 +227,11 @@ class LEDStateMachine(threading.Thread):
 				val = self.grid[r, c]
 				for i in xrange(4):
                                         if i == 3:
-                                                self.leddmx.setChannel(chan, 0)
+                                                self.dmx.setChannel(chan, 0)
                                         else:
-                                            self.leddmx.setChannel(chan, val[i])
+                                            self.dmx.setChannel(chan, val[i])
 					chan +=1
-		for i in xrange(4):
-                        self.lightdmx.setChannel(200+i, int(self.vlights[i]))
-                self.lightdmx.render()
-		self.leddmx.render()
+		self.dmx.render()
 		
 	def exit(self):
 		self.done = True
