@@ -1,5 +1,6 @@
 import json
 import numpy as np
+
 ROWS = 5
 COLS = 6
 
@@ -8,6 +9,7 @@ ADJUST_ARRAY = [[0.2, 0.4, 0.6, 0.6, 0.4, 0.2],
                 [0.6, 0.8, 1.0, 1.0, 0.8, 0.6],
                 [0.4, 0.6, 0.8, 0.8, 0.6, 0.4],
                 [0.2, 0.4, 0.6, 0.6, 0.4, 0.2]]
+
 
 def custom_sort(a, b):
 	a1 = a.split("::")[1]
@@ -29,10 +31,11 @@ def ledjson_to_array(json_filename, index=None):
 	i = 0
 	for key in keys:
 		if "rgb" in key:
-			led_array[i/COLS, i % COLS, :] = np.array(led_data[key])
-			i+=1
+			led_array[i / COLS, i % COLS, :] = np.array(led_data[key])
+			i += 1
 			print i
 	return led_array.astype(np.int)
+
 
 NIGHT_LEDS = ledjson_to_array("night_leds.json", 8)
 MORNING_LEDS = ledjson_to_array("morning_leds.json", 8)
